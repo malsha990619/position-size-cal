@@ -110,7 +110,7 @@ export default function App() {
     setEntryPrice('');
     setSlPrice('');
     setRiskPercentage('1');
-    setRiskReward('2');
+    setRiskReward('4');
     setLotSize(null);
     setSlDistance(null);
     setRiskAmount(null);

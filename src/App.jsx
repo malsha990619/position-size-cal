@@ -1,22 +1,71 @@
 import { useState, useEffect } from 'react';
 
+const INSTRUMENTS = {
+  XAUUSD: {
+    label: 'XAUUSD',
+    pipValue: 100,         // $100 per lot per $1 move
+    pipSize: 1,            // $1 price move = 1 "pip" for gold
+    slUnit: 'USD',
+    slLabel: 'SL Distance ($)',
+    entryPlaceholder: '2650.50',
+    slPlaceholder: '2642.28',
+    description: 'Gold / US Dollar',
+    formula: 'Risk ÷ (SL Distance × $100)',
+    formulaNote: 'XAUUSD: 1 lot = 100oz · $1 move = $100/lot',
+    tpFormulaNote: (dir) => `Entry ${dir === 'BUY' ? '+' : '-'} (SL Distance × RR)`,
+  },
+  GBPUSD: {
+    label: 'GBPUSD',
+    pipValue: 10,          // $10 per lot per pip
+    pipSize: 0.0001,       // 1 pip = 0.0001
+    slUnit: 'pips',
+    slLabel: 'SL Distance (pips)',
+    entryPlaceholder: '1.27500',
+    slPlaceholder: '1.27200',
+    description: 'British Pound / US Dollar',
+    formula: 'Risk ÷ (SL Pips × $10)',
+    formulaNote: 'GBPUSD: 1 lot = 100,000 units · 1 pip = $10/lot',
+    tpFormulaNote: (dir) => `Entry ${dir === 'BUY' ? '+' : '-'} (SL Pips × RR × 0.0001)`,
+  },
+};
+
 export default function App() {
+  const [instrument, setInstrument] = useState('XAUUSD');
   const [accountSize, setAccountSize] = useState('1000');
   const [entryPrice, setEntryPrice] = useState('');
   const [slPrice, setSlPrice] = useState('');
   const [riskPercentage, setRiskPercentage] = useState('1');
-  const [riskReward, setRiskReward] = useState('4');
+  const [riskReward, setRiskReward] = useState('3');
+
   const [lotSize, setLotSize] = useState(null);
   const [slDistance, setSlDistance] = useState(null);
+  const [slDistancePips, setSlDistancePips] = useState(null);
   const [riskAmount, setRiskAmount] = useState(null);
   const [tpPrice, setTpPrice] = useState(null);
   const [potentialProfit, setPotentialProfit] = useState(null);
   const [tradeDirection, setTradeDirection] = useState(null);
   const [error, setError] = useState('');
 
+  const inst = INSTRUMENTS[instrument];
+
   useEffect(() => {
     calculateLotSize();
-  }, [accountSize, entryPrice, slPrice, riskPercentage, riskReward]);
+  }, [accountSize, entryPrice, slPrice, riskPercentage, riskReward, instrument]);
+
+  // Reset prices when switching instruments
+  const handleInstrumentChange = (newInstrument) => {
+    setInstrument(newInstrument);
+    setEntryPrice('');
+    setSlPrice('');
+    setError('');
+    setLotSize(null);
+    setSlDistance(null);
+    setSlDistancePips(null);
+    setRiskAmount(null);
+    setTpPrice(null);
+    setPotentialProfit(null);
+    setTradeDirection(null);
+  };
 
   const calculateLotSize = () => {
     setError('');
@@ -71,21 +120,26 @@ export default function App() {
     // Calculate risk amount in dollars
     const riskInDollars = (account * risk) / 100;
 
-    // Calculate SL distance in dollars
-    const slDistanceValue = Math.abs(entry - sl);
+    const rawSlDistance = Math.abs(entry - sl);
 
-    // Calculate lot size using the formula: Risk ÷ (SL distance × $100)
-    const calculatedLotSize = riskInDollars / (slDistanceValue * 100);
-
-    // Calculate TP distance (SL distance × RR)
-    const tpDistance = slDistanceValue * rr;
-
-    // Calculate TP price based on trade direction
+    let calculatedLotSize;
     let calculatedTpPrice;
-    if (direction === 'BUY') {
-      calculatedTpPrice = entry + tpDistance;
+    let slInPips = null;
+
+    if (instrument === 'XAUUSD') {
+      // Lot Size = Risk / (SL distance × $100)
+      calculatedLotSize = riskInDollars / (rawSlDistance * inst.pipValue);
+      const tpDistance = rawSlDistance * rr;
+      calculatedTpPrice = direction === 'BUY' ? entry + tpDistance : entry - tpDistance;
     } else {
-      calculatedTpPrice = entry - tpDistance;
+      // GBPUSD: convert SL distance to pips first
+      slInPips = rawSlDistance / inst.pipSize;
+      // Lot Size = Risk / (SL pips × $10)
+      calculatedLotSize = riskInDollars / (slInPips * inst.pipValue);
+      const tpDistancePips = slInPips * rr;
+      calculatedTpPrice = direction === 'BUY'
+        ? entry + tpDistancePips * inst.pipSize
+        : entry - tpDistancePips * inst.pipSize;
     }
 
     // Calculate potential profit
@@ -99,7 +153,8 @@ export default function App() {
     }
 
     setRiskAmount(riskInDollars);
-    setSlDistance(slDistanceValue);
+    setSlDistance(rawSlDistance);
+    setSlDistancePips(slInPips);
     setLotSize(calculatedLotSize);
     setTpPrice(calculatedTpPrice);
     setPotentialProfit(profit);
@@ -110,9 +165,10 @@ export default function App() {
     setEntryPrice('');
     setSlPrice('');
     setRiskPercentage('1');
-    setRiskReward('4');
+    setRiskReward('3');
     setLotSize(null);
     setSlDistance(null);
+    setSlDistancePips(null);
     setRiskAmount(null);
     setTpPrice(null);
     setPotentialProfit(null);
@@ -126,20 +182,56 @@ export default function App() {
     }
   };
 
+  // Determine SL distance display
+  const slDistanceDisplay = () => {
+    if (instrument === 'XAUUSD') {
+      return { value: `$${slDistance?.toFixed(3) ?? '—'}`, label: 'SL Distance' };
+    } else {
+      return { value: `${slDistancePips?.toFixed(1) ?? '—'} pips`, label: 'SL Distance' };
+    }
+  };
+
+  const tpDistanceDisplay = () => {
+    if (instrument === 'XAUUSD') {
+      return { value: `$${(slDistance * riskReward)?.toFixed(3) ?? '—'}` };
+    } else {
+      return { value: `${(slDistancePips * riskReward)?.toFixed(1) ?? '—'} pips` };
+    }
+  };
+
+  const tpDecimals = instrument === 'XAUUSD' ? 2 : 5;
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 flex items-center justify-center p-4">
       <div className="w-full max-w-2xl">
         {/* Header */}
-        <div className="text-center mb-8">
-          <div className="inline-block">
+        <div className="text-center">
+          <div className="inline-block mb-4">
             <h1 className="text-4xl md:text-5xl font-bold text-white mb-2 tracking-tight">
               Position Size Calculator
             </h1>
             <div className="h-1 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full"></div>
           </div>
-          <p className="text-blue-200 mt-3 text-sm md:text-base">
-            Calculate your optimal lot size for XAUUSD trading
-          </p>
+          
+          {/* Instrument Toggle */}
+            <div className="flex justify-center mb-4">
+              <div className="flex bg-white/5 border border-white/10 rounded-xl p-1 gap-1">
+                {Object.keys(INSTRUMENTS).map((key) => (
+                  <button
+                    key={key}
+                    onClick={() => handleInstrumentChange(key)}
+                    className={`px-6 py-2.5 rounded-lg text-sm font-bold tracking-wider transition-all duration-200 hover:cursor-pointer ${
+                      instrument === key
+                        ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-lg shadow-blue-500/30'
+                        : 'text-blue-300 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    {key}
+                  </button>
+                ))}
+              </div>
+            </div>
+
         </div>
 
         {/* Main Calculator Card */}
@@ -200,8 +292,8 @@ export default function App() {
                     value={entryPrice}
                     onChange={(e) => setEntryPrice(e.target.value)}
                     className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                    placeholder="2650.50"
-                    step="0.01"
+                    placeholder={inst.entryPlaceholder}
+                    step="0.0001"
                   />
                 </div>
               </div>
@@ -217,7 +309,7 @@ export default function App() {
                     value={slPrice}
                     onChange={(e) => setSlPrice(e.target.value)}
                     className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                    placeholder="2642.28"
+                    placeholder={inst.slPlaceholder}
                     step="0.01"
                   />
                 </div>
@@ -280,7 +372,7 @@ export default function App() {
                       </p>
                     </div>
                     <button
-                      onClick={() => copyValue(lotSize, 5)}
+                      onClick={() => copyValue(lotSize, 2)}
                       className="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg text-white text-sm font-medium transition-all active:scale-95 hover:cursor-pointer"
                       title="Copy to clipboard"
                     >
@@ -297,11 +389,11 @@ export default function App() {
                         Take Profit Level
                       </p>
                       <p className="text-white text-4xl font-bold tracking-tight">
-                        {tpPrice.toFixed(2)}
+                        {tpPrice.toFixed(tpDecimals)}
                       </p>
                     </div>
                     <button
-                      onClick={() => copyValue(tpPrice, 2)}
+                      onClick={() => copyValue(tpPrice, tpDecimals)}
                       className="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg text-white text-sm font-medium transition-all active:scale-95 hover:cursor-pointer"
                       title="Copy to clipboard"
                     >
@@ -333,7 +425,7 @@ export default function App() {
                       SL Distance
                     </p>
                     <p className="text-white text-2xl font-bold">
-                      ${slDistance.toFixed(3)}
+                     {slDistanceDisplay().value}
                     </p>
                   </div>
                   <div className="bg-white/5 backdrop-blur rounded-xl p-4 border border-white/10">
@@ -341,7 +433,7 @@ export default function App() {
                       TP Distance
                     </p>
                     <p className="text-white text-2xl font-bold">
-                      ${(slDistance * riskReward).toFixed(3)}
+                     {tpDistanceDisplay().value}
                     </p>
                   </div>
                 </div>
@@ -356,13 +448,13 @@ export default function App() {
                     </div>
                     <div className="text-blue-100 text-sm leading-relaxed">
                       <p className="mb-2">
-                        <span className="font-semibold">Lot Size:</span> Risk ÷ (SL Distance × $100)
+                        <span className="font-semibold">Lot Size:</span> {inst.formula}
                       </p>
                       <p className="mb-2">
-                        <span className="font-semibold">TP Level:</span> Entry {tradeDirection === 'BUY' ? '+' : '-'} (SL Distance × RR)
+                        <span className="font-semibold">TP Level:</span> {inst.tpFormulaNote(tradeDirection)}
                       </p>
                       <p className="text-xs text-blue-300">
-                        Based on XAUUSD: 1 lot = 100oz, $1 per pip
+                        {inst.formulaNote}
                       </p>
                     </div>
                   </div>

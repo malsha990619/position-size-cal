@@ -48,6 +48,9 @@ export default function App() {
 
   const inst = INSTRUMENTS[instrument];
 
+  const [copiedEntry, setCopiedEntry] = useState(false);
+  const [copiedSl, setCopiedSl] = useState(false);
+
   useEffect(() => {
     calculateLotSize();
   }, [accountSize, entryPrice, slPrice, riskPercentage, riskReward, instrument]);
@@ -295,6 +298,17 @@ export default function App() {
                     placeholder={inst.entryPlaceholder}
                     step="0.0001"
                   />
+                   <button
+                    onClick={() => {
+                      copyValue(parseFloat(entryPrice), 5);
+                      setCopiedEntry(true);
+                      setTimeout(() => setCopiedEntry(false), 1500);
+                    }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-all active:scale-95 hover:cursor-pointer"
+                    title="Copy entry price"
+                  >
+                    <i className={copiedEntry ? "fa-solid fa-check text-green-400" : "fa-regular fa-copy"} />
+                  </button>
                 </div>
               </div>
 
@@ -312,6 +326,17 @@ export default function App() {
                     placeholder={inst.slPlaceholder}
                     step="0.01"
                   />
+                  <button
+                    onClick={() => {
+                      copyValue(parseFloat(slPrice), 5);
+                      setCopiedSl(true);
+                      setTimeout(() => setCopiedSl(false), 1500);
+                    }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-all active:scale-95 hover:cursor-pointer"
+                    title="Copy stop loss price"
+                  >
+                    <i className={copiedSl ? "fa-solid fa-check text-green-400" : "fa-regular fa-copy"} />
+                  </button>
                 </div>
               </div>
 
